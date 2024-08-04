@@ -15,6 +15,12 @@ type albumsStruct struct {
 	albums []string
 }
 
+type libraryStruct struct {
+	name         string
+	localAlbums  []string
+	remoteAlbums []string
+}
+
 // The commented keys are part of the response from https://www.metal-archives.com/ API response but not used in the code.
 type remoteAlbumsStruct struct {
 	// error                string
@@ -25,12 +31,12 @@ type remoteAlbumsStruct struct {
 }
 
 func main() {
-	localData, _ := GetLocalData(PATH)
-	remoteData, _ := GetRemoteData(localData)
+	localLibrary, _ := GetLocalData(PATH)
+	fullLibrary, _ := GetRemoteData(localLibrary)
 
-	result := compareAlbums(localData, remoteData)
-	for _, band := range result {
-		fmt.Printf("%s: %v\n", band.name, band.albums)
+	for _, band := range fullLibrary {
+		result := compareAlbums(band)
+		fmt.Printf("%s: %v\n", result.name, result.albums)
 	}
 }
 
@@ -50,17 +56,18 @@ func IOReadDir(path string) ([]string, error) {
 	return files, err
 }
 
-func GetLocalData(path string) ([]albumsStruct, error) {
-	localData := []albumsStruct{}
+func GetLocalData(path string) ([]libraryStruct, error) {
+	localData := []libraryStruct{}
 
 	bands, _ := IOReadDir(path)
 
 	for _, band := range bands {
 		bandAlbums, _ := IOReadDir(path + band)
 
-		singleBand := albumsStruct{
-			name:   band,
-			albums: bandAlbums,
+		singleBand := libraryStruct{
+			name:         band,
+			localAlbums:  bandAlbums,
+			remoteAlbums: []string{},
 		}
 
 		localData = append(localData, singleBand)
@@ -69,7 +76,7 @@ func GetLocalData(path string) ([]albumsStruct, error) {
 	return localData, nil
 }
 
-func getRemoteAlbums(band string) albumsStruct {
+func getRemoteAlbums(band libraryStruct) libraryStruct {
 	// TODO add GET request, the below one is the UI version, while the one used in resp, err := http.Get... is the API URL.
 	// metal-archives blocks requests from bots thanks to CloudFlare, so is not possible to fetch real data, neither by using selenium.
 
@@ -118,26 +125,27 @@ func getRemoteAlbums(band string) albumsStruct {
 		},
 	}
 
-	albums := []string{}
+	remoteAlbums := []string{}
 
 	for _, album := range rawData.aaData {
 		if slices.Contains(album, "Full-length") {
 			// TODO add string manipulation to get the URL text out of the HTML string, this is just a temprary solution for the POC
-			albums = append(albums, strings.Split(strings.Split(album[1], ">")[1], "</a")[0])
+			remoteAlbums = append(remoteAlbums, strings.Split(strings.Split(album[1], ">")[1], "</a")[0])
 		}
 	}
 
-	return albumsStruct{
-		name:   band,
-		albums: albums,
+	return libraryStruct{
+		name:         band.name,
+		localAlbums:  band.localAlbums,
+		remoteAlbums: remoteAlbums,
 	}
 }
 
-func GetRemoteData(localAlbums []albumsStruct) ([]albumsStruct, error) {
-	remoteData := []albumsStruct{}
+func GetRemoteData(library []libraryStruct) ([]libraryStruct, error) {
+	remoteData := []libraryStruct{}
 
-	for _, band := range localAlbums {
-		remoteAlbums := getRemoteAlbums(band.name)
+	for _, band := range library {
+		remoteAlbums := getRemoteAlbums(band)
 
 		remoteData = append(remoteData, remoteAlbums)
 	}
@@ -145,37 +153,21 @@ func GetRemoteData(localAlbums []albumsStruct) ([]albumsStruct, error) {
 	return remoteData, nil
 }
 
-func GetNewAlbums(localData []albumsStruct, remoteData []albumsStruct) ([]albumsStruct, error) {
-	newAlbums := []albumsStruct{}
+func compareAlbums(band libraryStruct) albumsStruct {
+	var result albumsStruct
+	newAlbums := []string{}
 
-	for _, band := range newAlbums {
-		remoteAlbums := getRemoteAlbums(band.name)
-
-		remoteData = append(remoteData, remoteAlbums)
-	}
-
-	return newAlbums, nil
-}
-
-func compareAlbums(albums1, albums2 []albumsStruct) []albumsStruct {
-	var result []albumsStruct
-
-	for index, band := range albums2 {
-		newAlbums := []string{}
-
-		if reflect.DeepEqual(albums1[index].albums, band.albums) {
-			newAlbums = append(newAlbums, "No new albums")
-		} else {
-			for _, album := range band.albums {
-				if !slices.Contains(albums1[index].albums, album) {
-					newAlbums = append(newAlbums, album)
-				}
+	if reflect.DeepEqual(band.localAlbums, band.remoteAlbums) {
+		newAlbums = append(newAlbums, "No new albums")
+	} else {
+		for _, album := range band.remoteAlbums {
+			if !slices.Contains(band.localAlbums, album) {
+				newAlbums = append(newAlbums, album)
 			}
-
 		}
-
-		result = append(result, albumsStruct{name: band.name, albums: newAlbums})
 	}
+
+	result = albumsStruct{name: band.name, albums: newAlbums}
 
 	return result
 }

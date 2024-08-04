@@ -14,12 +14,17 @@ func TestIOReadDir(t *testing.T) {
 		{
 			"IORead Band",
 			"./test/",
-			[]string{"band"},
+			[]string{"band", "band2"},
 		},
 		{
-			"IORead Albums",
+			"IORead Albums Band 1",
 			"./test/band",
 			[]string{"album_1", "album_2"},
+		},
+		{
+			"IORead Albums  Band 2",
+			"./test/band2",
+			[]string{"band_2_album_1", "band_2_album_2"},
 		},
 	}
 
@@ -38,12 +43,12 @@ func TestGetLocalData(t *testing.T) {
 	tests := []struct {
 		name string
 		args string
-		want []albumsStruct
+		want []libraryStruct
 	}{
 		{
 			"LocalAlbums",
 			"./test/",
-			[]albumsStruct{{"band", []string{"album_1", "album_2"}}},
+			[]libraryStruct{{"band", []string{"album_1", "album_2"}, []string{}}, {"band2", []string{"band_2_album_1", "band_2_album_2"}, []string{}}},
 		},
 	}
 
@@ -61,13 +66,13 @@ func TestGetLocalData(t *testing.T) {
 func TestGetRemoteAlbums(t *testing.T) {
 	tests := []struct {
 		name string
-		band string
-		want albumsStruct
+		band libraryStruct
+		want libraryStruct
 	}{
 		{
 			"RemoteAlbums",
-			"band name",
-			albumsStruct{"band name", []string{"Album 1", "Album 2", "Album 3"}},
+			libraryStruct{name: "band name", localAlbums: []string{"Album 1", "Album 2"}, remoteAlbums: []string{}},
+			libraryStruct{name: "band name", localAlbums: []string{"Album 1", "Album 2"}, remoteAlbums: []string{"Album 1", "Album 2", "Album 3"}},
 		},
 	}
 	for _, tt := range tests {
@@ -81,19 +86,25 @@ func TestGetRemoteAlbums(t *testing.T) {
 
 func TestGetRemoteData(t *testing.T) {
 	tests := []struct {
-		name        string
-		localAlbums []albumsStruct
-		want        []albumsStruct
+		name    string
+		library []libraryStruct
+		want    []libraryStruct
 	}{
 		{
 			"RemoteData",
-			[]albumsStruct{{"band1", []string{"album 1", "album 2"}}, {"band2", []string{"album 1", "album 2", "album 3"}}},
-			[]albumsStruct{{"band1", []string{"Album 1", "Album 2", "Album 3"}}, {"band2", []string{"Album 1", "Album 2", "Album 3"}}},
+			[]libraryStruct{
+				{name: "band name", localAlbums: []string{"Album 1", "Album 2"}, remoteAlbums: []string{}},
+				{name: "band 2", localAlbums: []string{"Album 1", "Album 2"}, remoteAlbums: []string{}},
+			},
+			[]libraryStruct{
+				{name: "band name", localAlbums: []string{"Album 1", "Album 2"}, remoteAlbums: []string{"Album 1", "Album 2", "Album 3"}},
+				{name: "band 2", localAlbums: []string{"Album 1", "Album 2"}, remoteAlbums: []string{"Album 1", "Album 2", "Album 3"}},
+			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _ := GetRemoteData(tt.localAlbums)
+			got, _ := GetRemoteData(tt.library)
 
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("GetRemoteData() = %v, want %v", got, tt.want)
@@ -104,27 +115,24 @@ func TestGetRemoteData(t *testing.T) {
 
 func TestCompareAlbums(t *testing.T) {
 	tests := []struct {
-		name    string
-		albums1 []albumsStruct
-		albums2 []albumsStruct
-		want    []albumsStruct
+		name string
+		band libraryStruct
+		want albumsStruct
 	}{
 		{
 			"compare new albums",
-			[]albumsStruct{{"band1", []string{"Album 1", "Album 2"}}, {"band2", []string{"Album 1", "Album 2", "Album 3"}}},
-			[]albumsStruct{{"band1", []string{"Album 1", "Album 2", "Album 3"}}, {"band2", []string{"Album 1", "Album 2", "Album 3"}}},
-			[]albumsStruct{{"band1", []string{"Album 3"}}, {"band2", []string{"No new albums"}}},
+			libraryStruct{name: "band name", localAlbums: []string{"Album 1", "Album 2"}, remoteAlbums: []string{"Album 1", "Album 2", "Album 3"}},
+			albumsStruct{"band name", []string{"Album 3"}},
 		},
 		{
 			"compare no new albums",
-			[]albumsStruct{{"band1", []string{"Album 1", "Album 2"}}, {"band2", []string{"Album 1", "Album 2", "Album 3"}}},
-			[]albumsStruct{{"band1", []string{"Album 1", "Album 2"}}, {"band2", []string{"Album 1", "Album 2", "Album 3"}}},
-			[]albumsStruct{{"band1", []string{"No new albums"}}, {"band2", []string{"No new albums"}}},
+			libraryStruct{name: "band", localAlbums: []string{"Album 1", "Album 2", "Album 3"}, remoteAlbums: []string{"Album 1", "Album 2", "Album 3"}},
+			albumsStruct{"band", []string{"No new albums"}},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := compareAlbums(tt.albums1, tt.albums2); !reflect.DeepEqual(got, tt.want) {
+			if got := compareAlbums(tt.band); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("compareAlbums() = %v, want %v", got, tt.want)
 			}
 		})
